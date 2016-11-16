@@ -3,7 +3,7 @@
 This tool is used for automatic ruleset generation for the software [https-everywhere](https://github.com/efforg/https-everywhere).
 
 # Installation
-This installation bashscript will prepear dependencies and install required python libraries.
+This installation bashscript will prepare dependencies and install required python libraries.
 
     $ bash setup.sh
 
@@ -19,8 +19,8 @@ Example:
 # Roadmap
 
 [X] Step 1: Create prototype as working example.
-[ ] Step 2: Stablise and finish for general use.
-[ ] Step 3: Possbily merge into the main EFForg/https-everywhere project.
+[ ] Step 2: Stabilise and finish for general use.
+[ ] Step 3: Possibly merge into the main EFForg/https-everywhere project.
 
 # To-Do List
 
