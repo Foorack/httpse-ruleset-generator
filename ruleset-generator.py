@@ -9,7 +9,7 @@ from Sublist3r import sublist3r as s3
 if len(sys.argv) != 3:
     print("Invalid arguments!")
     print("Usage: python3 ruleset-generator.py <domain> \"<website name>\"")
-    print("Example: python3 ruleset-generator.py europa.eu \"European Union\"")
+    print("Example: python3 ruleset-generator.py eff.org \"Electronic Frontier Foundation\"")
     exit()
     
 domain_check = re.compile("^(http|https)?[a-zA-Z0-9]+([\-\.]{1}[a-zA-Z0-9]+)*\.[a-zA-Z]{2,}$")
