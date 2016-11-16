@@ -5,6 +5,19 @@ import re
 from Sublist3r import sublist3r as s3
 
 
+#'h' stands for hosts
+htimeout = []
+hrefused = []
+hbadcert = []
+hinchain = []
+hredirect = []
+hsslerror = []
+
+hsuccess = []
+hdiffcont = []
+hmixedcont = []
+
+
 # Step 0: Check arguments
 if len(sys.argv) != 3:
     print("Invalid arguments!")
@@ -19,117 +32,120 @@ if not domain_check.match(sys.argv[1]):
 
 
 # Step 1: Run Sublist3r
-hosts = s3.main(sys.argv[1], 30, False, None, False, False, False)
-hosts.append(sys.argv[1])
+hosts = [sys.argv[1]]
+hosts.extend(s3.main(sys.argv[1], 30, False, None, False, False, False))
 
 # Step 2: Sort out false positives
 hostsok = []
 for host in hosts:
+    resp, resps = False, False
     try:
-        resp = requests.get("http://" + host + '/', timeout=15, allow_redirects=True, headers={'User-Agent': 'HTTPSE-ruleset-generator STEP1. Internet security project https://github.com/Foorack/httpse-ruleset-generator.'})
-        hostsok.append([host, resp])
+        resp = requests.get("http://" + host + '/', timeout=8, allow_redirects=True, headers={'User-Agent': 'HTTPSE-ruleset-generator STEP1. Internet security project https://github.com/Foorack/httpse-ruleset-generator.'})
     except requests.exceptions.ConnectionError:
-        continue
+        ()
     except requests.exceptions.Timeout:
+        ()
+    
+    try:
+        resps = requests.get("https://" + host + '/', timeout=8, allow_redirects=True, headers={'User-Agent': 'HTTPSE-ruleset-generator STEP2. Internet security project https://github.com/Foorack/httpse-ruleset-generator.'})
+    except requests.exceptions.SSLError as err:
+        msg = str(err)
+        if "doesn't match" in msg:
+            hbadcert.append(host)
+            continue
+        elif "CERTIFICATE_VERIFY_FAILED" in msg:
+            hinchain.append(host)
+            continue
+        else:
+            hsslerror.append(host)
+            continue
+    except requests.exceptions.Timeout:
+        if resp == False: # Ignore if HTTP also didn't work
+            continue
+        htimeout.append(host)
         continue
+    except requests.exceptions.RequestException:
+        if resp == False: # Ignore if HTTP also didn't work
+            continue
+        hrefused.append(host)
+        continue
+    
+    print(host, resp, resps)
+    
+    if resp == False:
+        hsuccess.append(host)                                   # Perfect, only HTTPS works
+    else:
+        hostsok.append([host, resp, resps])
 hosts = hostsok
 
 
 # Step 3: Check for SSL availability
-#'h' stands for hosts
-htimeout = []
-hrefused = []
-hbadcert = []
-hinchain = []
-hredirect = []
-hsslerror = []
-
-hsuccess = []
-hdiffcont = []
-hmixedcont = []
-
 for host in hosts:
-    try:
-        resps = requests.get("https://" + host[0] + "/", timeout=15, allow_redirects=True, headers={'User-Agent': 'HTTPSE-ruleset-generator STEP2. Internet security project https://github.com/Foorack/httpse-ruleset-generator.'})
-        if resps.url.startswith("http://"):                         # Does HTTPS redirect to HTTP?
-            hredirect.append(host[0])
-        elif resps.url.startswith("https://"):                       # Okay so HTTPS is still on HTTPS...
-            if host[1].url.startswith("https://"):                  # Does HTTP redirect to HTTPS?
-                hsuccess.append(host[0])                            # Perfect! Can't be wrong content then!
-            else:                                                   # Oh so HTTP does not redirect to HTTPS, have to check content then
-                if abs(len(resps.content) - len(host[1].content)) < 250: # TODO: Update this checker
-                    if resps.content.decode('utf-8').find("src=\"http://") != -1 or resps.content.decode('utf-8').find("type=\"text/css\" href=\"http://") != -1 or resps.content.decode('utf-8').find("url(\"http://") != -1:
-                        hmixedcont.append(host[0])
-                    else:
-                        hsuccess.append(host[0])
+    if host[2].url.startswith("http://"):                      # Does HTTPS redirect to HTTP?
+        hredirect.append(host[0])
+    elif host[2].url.startswith("https://"):                   # Okay so HTTPS is still on HTTPS...
+        if host[1].url.startswith("https://"):                  # Does HTTP redirect to HTTPS?
+            hsuccess.append(host[0])                            # Perfect! Can't be wrong content then!
+        else:                                                   # Oh so HTTP does not redirect to HTTPS, have to check content then
+            if abs(len(host[2].content) - len(host[1].content)) < 250: # TODO: Update this checker
+                if host[2].content.decode('utf-8', 'ignore').find("src=\"http://") != -1 or host[2].content.decode('utf-8', 'ignore').find("type=\"text/css\" href=\"http://") != -1 or host[2].content.decode('utf-8', 'ignore').find("url(\"http://") != -1:
+                    hmixedcont.append(host[0])
                 else:
-                    print(abs(len(resps.content) - len(host[1].content)))
-                    hdiffcont.append(host[0])
-    except requests.exceptions.SSLError as err:
-        msg = str(err)
-        if "doesn't match" in msg:
-            hbadcert.append(host[0])
-        elif "CERTIFICATE_VERIFY_FAILED" in msg:
-            hinchain.append(host[0])
-        else:
-            hsslerror.append(host)
-    except requests.exceptions.Timeout:
-        htimeout.append(host[0])
-    except requests.exceptions.RequestException:
-        hrefused.append(host[0])
+                    hsuccess.append(host[0])
+            else:
+                print(abs(len(host[2].content) - len(host[1].content)))
+                hdiffcont.append(host[0])
 
 # Step 4: Print results to output file
 f = open(sys.argv[1] + '.xml', 'w')
 f.write("<!--\n")
 f.write("\n")
-f.write("   This ruleset was automatically generated by HTTPSE-ruleset generator.\n")
-f.write("   The generator is not perfect and the ruleset is recommended to be reviewed\n")
-f.write("   by a human person before submitting. Please report any problems occuring!\n")
+f.write("   Generator: HTTPSE-ruleset-generator v1.0\n")
 f.write("\n")
 
-if len(hrefused) > 1:
+if len(hrefused) > 0:
     f.write("   Refused:\n")
     for host in hrefused:
         f.write("       - " + host + "\n")
     f.write("\n")
     
-if len(htimeout) > 1:
+if len(htimeout) > 0:
     f.write("   Timeout:\n")
     for host in htimeout:
         f.write("       - " + host + "\n")
     f.write("\n")
 
-if len(hbadcert) > 1:
+if len(hbadcert) > 0:
     f.write("   Wrong certificate:\n")
     for host in hbadcert:
         f.write("       - " + host + "\n")
     f.write("\n")
     
-if len(hinchain) > 1:
+if len(hinchain) > 0:
     f.write("   Incomplete certificate-chain:\n")
     for host in hinchain:
         f.write("       - " + host + "\n")
     f.write("\n")
     
-if len(hsslerror) > 1:
+if len(hsslerror) > 0:
     f.write("   Other unknown SSL error:\n")
     for host in hsslerror:
         f.write("       - " + host + "\n")
     f.write("\n")
     
-if len(hredirect) > 1:
+if len(hredirect) > 0:
     f.write("   Redirects to HTTP:\n")
     for host in hredirect:
         f.write("       - " + host + "\n")
     f.write("\n")
     
-if len(hdiffcont) > 1:
+if len(hdiffcont) > 0:
     f.write("   Different content:\n")
     for host in hdiffcont:
         f.write("       - " + host + "\n")
     f.write("\n")
     
-if len(hmixedcont) > 1:
+if len(hmixedcont) > 0:
     f.write("   Mixed content:\n")
     for host in hmixedcont:
         f.write("       - " + host + "\n")
