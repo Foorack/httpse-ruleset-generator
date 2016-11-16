@@ -24,8 +24,8 @@ Example:
 
 # To-Do List
 
-[] Modulise the code
-[] Proper argument handling
-[] Improve mixed-content checks
-[] Improve different-content checks
-[] Check if http redirects to other domain
+[ ] Clean up code
+[X] Proper argument handling
+[ ] Improve mixed-content checks
+[ ] Improve different-content checks
+[ ] Check if http redirects to other domain
