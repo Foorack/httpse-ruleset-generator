@@ -1,5 +1,6 @@
 #!/bin/bash
 rm subbrute -rf
+git submodule update --init
 git submodule update --recursive --remote
 sudo pip3 install -r requirements.txt
 sudo pip3 install -r requirements.txt --upgrade
