@@ -28,4 +28,4 @@ Example:
 [X] Proper argument handling
 [ ] Improve mixed-content checks
 [ ] Improve different-content checks
-[ ] Check if http redirects to other domain
+[X] Check if http redirects to other domain
