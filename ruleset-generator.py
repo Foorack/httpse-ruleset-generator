@@ -113,10 +113,6 @@ def test_domain(host):
             if resp.url.startswith("https://"):
                 rules.append([host, resp.url])
             else:
-                if resp.url.startswith("http://www"):
-                    hbadcerttmp.append([host, resp.url[11:]])
-                    return # TODO: double check this ^
-                    
                 if len(resp.history) > 0:
                     hbadcerttmp.append([host, resp.url[7:]])
                 else:
