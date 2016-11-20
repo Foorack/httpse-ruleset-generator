@@ -59,8 +59,12 @@ def check_chrome_301_header_trunc(resps):
         if hre.status_code == 301 or hre.status_code == 302: # do 302 as well :)
             CRLF = "\r\n"
             
+            addr = "/"
+            if(len(hre.url.split("/")) > 3)
+                addr = hre.url[(7 + len(hre.url.split("/")[2])):]
+            
             request = [
-                "GET / HTTP/1.1",
+                "GET " + addr + " HTTP/1.1",
                 "Host: " + hre.url.split("/")[2],
                 "Connection: Close",
                 "",
@@ -376,9 +380,8 @@ def main(domain, name, timeout, verbose):
         f.write("\n")
         
     for rule in rules:
-        print(rule)
         if rule[2] == 1:
-            f.write("\t<!-- The domain " + re.escape(rule[0]) + " is redirected because the secure version sends a invalid redirect response. -->\n")
+            f.write("\t<!-- The domain " + rule[0] + " is redirected because the secure version sends an invalid redirect response. -->\n")
         f.write("\t<rule from=\"^http://" + re.escape(rule[0]) + "/\" to=\"" + rule[1] + "\" />\n")
     if len(rules) > 0:
         f.write("\n")
