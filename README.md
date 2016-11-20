@@ -1,6 +1,6 @@
 # httpse-ruleset-generator
 
-This tool is used for automatic ruleset generation for the software [https-everywhere](https://github.com/efforg/https-everywhere).
+This tool is used for automatic ruleset generation for the software - [https-everywhere](https://github.com/efforg/https-everywhere).
 
 # Installation
 This installation bashscript will prepare dependencies and install required python libraries.
@@ -18,14 +18,16 @@ Example:
     
 # Roadmap
 
-[X] Step 1: Create prototype as working example.
-[ ] Step 2: Stabilise and finish for general use.
-[ ] Step 3: Possibly merge into the main EFForg/https-everywhere project.
+- [X] Step 1: Create prototype as working example.
+- [ ] Step 2: Stabilise and finish for general use.
+- [ ] Step 3: Possibly merge into the main EFForg/https-everywhere project.
 
 # To-Do List
 
-[ ] Clean up code
-[X] Proper argument handling
-[ ] Improve mixed-content checks
-[ ] Improve different-content checks
-[X] Check if http redirects to other domain
+- [ ] Clean up code
+- [X] Proper argument handling
+- [ ] Implement mixed-content checks
+- [ ] Implement different-content checks
+- [X] Check if http redirects to other domain
+- [X] Add support for non-success error codes
+- [X] Fix chrome header truncate error issue
