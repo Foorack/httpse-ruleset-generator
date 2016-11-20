@@ -215,7 +215,7 @@ def test_domain(host):
     # Lets check if HTTPS redirects to another HTTPS?
     if resps.url.startswith("https://"):
         if e301:
-            rules.append([host, resps.url, 0])
+            rules.append([host, resps.url, 1])
         else:
             hsuccess.append(host)
         return
