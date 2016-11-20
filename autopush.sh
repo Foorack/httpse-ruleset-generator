@@ -4,7 +4,7 @@ rm $1.xml
 
 python3 ruleset-generator.py -d $1 -n "$2" -v
 
-c9 open $1.xml
+cat $1.xml
 echo "Does the file $1.xml look good? Ctrl+C if not."
 read test1
 read test2
