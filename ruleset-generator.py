@@ -3,9 +3,31 @@ import functools
 import re
 import requests
 import socket
+import ssl
 import subprocess
 import sys
 from Sublist3r import sublist3r as s3
+
+#'h' stands for hosts
+htimeout = []
+hrefused = []
+hbadcert = []
+hbadcerttmp = []
+hinchain = []
+hredirect = []
+hredirecttmp = []
+hsslerror = []
+h503 = []
+h401 = []
+h403 = []
+
+rules = []
+hsuccess = []
+hdiffcont = []
+hmixedcont = []
+
+def is_bad_domains():
+    return len(hrefused) > 0 or len(htimeout) > 0 or len(hbadcert) > 0 or len(hinchain) > 0 or len(hsslerror) > 0 or len(hredirect) > 0 or len(hdiffcont) > 0 or len(hmixedcont) > 0 or len(h401) > 0 or len(403) > 0 or len(503) > 0
 
 def parser_error(errmsg):
     print("Usage: python3 " + sys.argv[0] + " [Options] use -h for help")
@@ -31,6 +53,37 @@ def find_domains(domain, verbose):
     hosts = [domain]
     hosts.extend(s3.main(domain, 30, False, None, not verbose, verbose, False, 'Baidu,Yahoo,Google,Bing,Ask,Netcraft,Virustotal,SSL'))
     return hosts
+
+def check_chrome_301_header_trunc(resps):
+    for hre in resps.history:
+        if hre.status_code == 301 or hre.status_code == 302: # do 302 as well :)
+            CRLF = "\r\n"
+            
+            request = [
+                "GET / HTTP/1.1",
+                "Host: " + hre.url.split("/")[2],
+                "Connection: Close",
+                "",
+                "",
+            ]
+            
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(10)
+            
+            wrappedSocket = ssl.wrap_socket(sock)
+
+            wrappedSocket.connect((hre.url.split("/")[2], 443))
+            wrappedSocket.send(CRLF.join(request).encode('utf-8'))
+            # Get the response (in several parts, if necessary)
+            response = wrappedSocket.recv(4096)
+            
+            wrappedSocket.close()
+            
+            # HTTP headers will be separated from the body by an empty line
+            header_data, ll, body = response.decode('utf-8').partition(CRLF + CRLF)
+            
+            return ll != '\r\n\r\n'
+    return False
     
 # https://github.com/jeremyn/Sublist3r/blob/09a2b9cdaf020a7dac6701765a846807ef6db814/sublist3r.py#L82
 def subdomain_cmp(d1, d2):
@@ -69,29 +122,14 @@ def subdomain_cmp(d1, d2):
             val = 1
     return val
 
-#'h' stands for hosts
-htimeout = []
-hrefused = []
-hbadcert = []
-hbadcerttmp = []
-hinchain = []
-hredirect = []
-hredirecttmp = []
-hsslerror = []
-
-rules = []
-hsuccess = []
-hdiffcont = []
-hmixedcont = []
-
 def test_domain(host):
-    
     # Check if DNS exists to save time
     try:
         socket.gethostbyname(host)
     except socket.gaierror: # DNS does not exist
         return
     
+    # Do HTTP
     resp, resps = None, None
     try:
         resp = requests.get("http://" + host + '/', timeout=timeout, allow_redirects=True, headers={'User-Agent': 'HTTPSE-ruleset-generator STEP1. Internet security project https://github.com/Foorack/httpse-ruleset-generator.', 'Connection':'close'})
@@ -100,6 +138,7 @@ def test_domain(host):
     except requests.exceptions.Timeout or socket.timeout:
         ()
     
+    # Do HTTPS
     try:
         resps = requests.get("https://" + host + '/', timeout=timeout, allow_redirects=True, headers={'User-Agent': 'HTTPSE-ruleset-generator STEP2. Internet security project https://github.com/Foorack/httpse-ruleset-generator.', 'Connection':'close'})
     except requests.exceptions.SSLError as err:
@@ -111,7 +150,7 @@ def test_domain(host):
                 
             # Check if HTTP redirects to a working HTTPS website
             if resp.url.startswith("https://"):
-                rules.append([host, resp.url])
+                rules.append([host, resp.url, 0])
             else:
                 if len(resp.history) > 0:
                     hbadcerttmp.append([host, resp.url[7:]])
@@ -146,6 +185,16 @@ def test_domain(host):
     # At this point we know HTTPS works fine and that HTTP responds
     # ...
     
+    if resps.status_code == 401:
+        h401.append(host)
+        return
+    if resps.status_code == 403:
+        h403.append(host)
+        return
+    if resps.status_code == 503:
+        h503.append(host)
+        return
+    
     # Check if HTTP redirects to the same domain with HTTPS
     if resp.url.startswith("https://" + host):
         hsuccess.append(host)
@@ -158,20 +207,28 @@ def test_domain(host):
     
     # HTTP redirects to another domain
     
+    # Check Chrome 301 trunc header issue
+    e301 = False
+    if len(resps.history) > 0:
+        e301 = check_chrome_301_header_trunc(resps)
+    
     # Lets check if HTTPS redirects to another HTTPS?
     if resps.url.startswith("https://"):
-        hsuccess.append(host)
+        if e301:
+            rules.append([host, resps.url, 0])
+        else:
+            hsuccess.append(host)
         return
     
     # Lets check if HTTPS redirects to HTTP?
     if resps.url.startswith("http://"):
-        hredirecttmp.append([host, resps.url[7:]])
+        hredirecttmp.append([host, resps.url[7:], e301])
         return
     
     if resp.url.startswith("http://"):
-        hredirecttmp.append([host, resps.url[7:]])
+        hredirecttmp.append([host, resps.url[7:], e301])
     else:
-        rules.append([host, resp.url])
+        rules.append([host, resp.url, 0])
     
     return
 
@@ -197,19 +254,22 @@ def main(domain, name, timeout, verbose):
         def dd1():
             for host in hsuccess:
                 if hr[1].startswith(host):
-                    hsuccess.append(hr[0])
+                    if hr[2]:
+                        rules.append([hr[0], hr[1], 1]) # 301 bug w/ chrome
+                    else:
+                        hsuccess.append(hr[0])
                     return True
             return False
         if not dd1():
             hredirect.append(hr[0])
     
-    # 
+    # Check if hosts with bad cert HTTP-redirect to a good host
     print(hbadcerttmp)
     for hr in hbadcerttmp:
         def dd2():
             for host in hsuccess:
                 if hr[1].startswith(host):
-                    rules.append([hr[0], "https://" + hr[1]])
+                    rules.append([hr[0], "https://" + hr[1], 0])
                     return True
             return False
         if not dd2():
@@ -219,6 +279,7 @@ def main(domain, name, timeout, verbose):
     for rule in rules:
         hsuccess.append(rule[0])
     
+    # Sort domains the way we want it
     hsuccess1 = sorted(
             hsuccess,
             key=functools.cmp_to_key(subdomain_cmp),
@@ -230,75 +291,99 @@ def main(domain, name, timeout, verbose):
     
     # Step 3: Print results to output file
     f = open(domain + '.xml', 'w')
-    if len(hrefused) > 0 or len(htimeout) > 0 or len(hbadcert) > 0 or len(hinchain) > 0 or len(hsslerror) > 0 or len(hredirect) > 0 or len(hdiffcont) > 0 or len(hmixedcont) > 0:
+    if is_bad_domains():
         f.write("<!--\n")
         f.write("\n")
-    #f.write("    Generator: HTTPSE-ruleset-generator v1.0\n")
+    #f.write("\tGenerator: HTTPSE-ruleset-generator v1.0\n")
     #f.write("\n")
     
+    if len(h401) > 0:
+        f.write("\t401 Unauthorized:\n")
+        for host in h401:
+            f.write("\t\t- " + host + "\n")
+        f.write("\n")
+    
+    if len(h403) > 0:
+        f.write("\t403 Forbidden:\n")
+        for host in h403:
+            f.write("\t\t- " + host + "\n")
+        f.write("\n")
+        
+    if len(h503) > 0:
+        f.write("\t503 Service Unavailable:\n")
+        for host in h503:
+            f.write("\t\t- " + host + "\n")
+        f.write("\n")
+    
     if len(hrefused) > 0:
-        f.write("    Refused:\n")
+        f.write("\tRefused:\n")
         for host in hrefused:
-            f.write("        - " + host + "\n")
+            f.write("\t\t- " + host + "\n")
         f.write("\n")
         
     if len(htimeout) > 0:
-        f.write("    Timeout:\n")
+        f.write("\tTimeout:\n")
         for host in htimeout:
-            f.write("        - " + host + "\n")
+            f.write("\t\t- " + host + "\n")
         f.write("\n")
     
     if len(hbadcert) > 0:
-        f.write("    Invalid certificate:\n")
+        f.write("\tInvalid certificate:\n")
         for host in hbadcert:
-            f.write("        - " + host + "\n")
+            f.write("\t\t- " + host + "\n")
         f.write("\n")
         
     if len(hinchain) > 0:
-        f.write("    Incomplete certificate-chain:\n")
+        f.write("\tIncomplete certificate-chain:\n")
         for host in hinchain:
-            f.write("        - " + host + "\n")
+            f.write("\t\t- " + host + "\n")
         f.write("\n")
         
     if len(hsslerror) > 0:
-        f.write("    Other unknown SSL error:\n")
+        f.write("\tOther unknown SSL error:\n")
         for host in hsslerror:
-            f.write("        - " + host + "\n")
+            f.write("\t\t- " + host + "\n")
         f.write("\n")
         
     if len(hredirect) > 0:
-        f.write("    Redirects to HTTP:\n")
+        f.write("\tRedirects to HTTP:\n")
         for host in hredirect:
-            f.write("        - " + host + "\n")
+            f.write("\t\t- " + host + "\n")
         f.write("\n")
         
     if len(hdiffcont) > 0:
-        f.write("    Different content:\n")
+        f.write("\tDifferent content:\n")
         for host in hdiffcont:
-            f.write("        - " + host + "\n")
+            f.write("\t\t- " + host + "\n")
         f.write("\n")
         
     if len(hmixedcont) > 0:
-        f.write("    MCB:\n")
+        f.write("\tMCB:\n")
         for host in hmixedcont:
-            f.write("        - " + host + "\n")
+            f.write("\t\t- " + host + "\n")
         f.write("\n")
     
-    if len(hrefused) > 0 or len(htimeout) > 0 or len(hbadcert) > 0 or len(hinchain) > 0 or len(hsslerror) > 0 or len(hredirect) > 0 or len(hdiffcont) > 0 or len(hmixedcont) > 0:
+    if is_bad_domains():
         f.write("-->\n")
     
     f.write("<ruleset name=\"" + name + "\">\n")
     for host in hsuccess:
-        f.write("    <target host=\"" + host + "\" />\n")
+        f.write("\t<target host=\"" + host + "\" />\n")
+    
     f.write("\n")
-    f.write("    <securecookie host=\".+\" name=\".+\" />\n")
-    f.write("\n")
+    if is_bad_domains():
+        f.write("\t<securecookie host=\".+\" name=\".+\" />\n")
+        f.write("\n")
+        
     for rule in rules:
-        f.write("    <rule from=\"^http://" + re.escape(rule[0]) + "/\" to=\"" + rule[1] + "\" />\n")
+        print(rule)
+        if rule[2] == 1:
+            f.write("\t<!-- The domain " + re.escape(rule[0]) + " is redirected because the secure version sends a invalid redirect response. -->\n")
+        f.write("\t<rule from=\"^http://" + re.escape(rule[0]) + "/\" to=\"" + rule[1] + "\" />\n")
     if len(rules) > 0:
         f.write("\n")
-    f.write("    <rule from=\"^http:\" to=\"https:\" />\n")
-    f.write("</ruleset>\n")
+    f.write("\t<rule from=\"^http:\" to=\"https:\" />\n")
+    f.write("</ruleset>")
     f.flush()
 
 if __name__=="__main__":
