@@ -6,6 +6,8 @@ import socket
 import ssl
 import subprocess
 import sys
+from lxml import html
+from lxml import etree
 from Sublist3r import sublist3r as s3
 
 #'h' stands for hosts
@@ -18,7 +20,6 @@ hredirect = []
 hredirecttmp = []
 hsslerror = []
 h503 = []
-h401 = []
 h403 = []
 
 rules = []
@@ -27,26 +28,46 @@ hdiffcont = []
 hmixedcont = []
 
 def is_bad_domains():
-    return len(hrefused) > 0 or len(htimeout) > 0 or len(hbadcert) > 0 or len(hinchain) > 0 or len(hsslerror) > 0 or len(hredirect) > 0 or len(hdiffcont) > 0 or len(hmixedcont) > 0 or len(h401) > 0 or len(403) > 0 or len(503) > 0
-
+    if len(htimeout) > 0:
+        return True
+    if len(hrefused) > 0:
+        return True
+    if len(hbadcert) > 0:
+        return True
+    if len(hinchain) > 0:
+        return True
+    if len(hredirect) > 0:
+        return True
+    if len(hsslerror) > 0:
+        return True
+    if len(h503) > 0:
+        return True
+    if len(h403) > 0:
+        return True
+    if len(hdiffcont) > 0:
+        return True
+    if len(hmixedcont) > 0:
+        return True
+        
+    return False
 def parser_error(errmsg):
-    print("Usage: python3 " + sys.argv[0] + " [Options] use -h for help")
-    print("Error: " + errmsg)
+    print('Usage: python3 ' + sys.argv[0] + ' [Options] use -h for help')
+    print('Error: ' + errmsg)
     exit()
 
 def parse_args():
     # Parse the arguments
-    parser = argparse.ArgumentParser(epilog = '    Example: \r\npython3 ' + sys.argv[0] + " -d eff.org")
+    parser = argparse.ArgumentParser(epilog = '    Example: \r\npython3 ' + sys.argv[0] + ' -d eff.org')
     parser.error = parser_error
-    parser._optionals.title = "OPTIONS"
-    parser.add_argument('-d', '--domain', help="Domain to generate ruleset about, TLD, do not include www", required=True)
-    parser.add_argument('-n', '--name', help='Label the ruleset with a custom name, for example "Electronic Frontier Foundation"',type=str, default='')
+    parser._optionals.title = 'OPTIONS'
+    parser.add_argument('-d', '--domain', help='Domain to generate ruleset about, TLD, do not include www', required=True)
+    parser.add_argument('-n', '--name', help='Label the ruleset with a custom name, for example \"Electronic Frontier Foundation\"',type=str, default='')
     parser.add_argument('-t', '--timeout', help='Define timeout value, this might be neccesary on slower internet connections', type=int, default=8)
     parser.add_argument('-v', '--verbose', help='Enable Verbosity and display results in realtime',nargs='?', default=False)
     return parser.parse_args()
 
 def check_domain(domain):
-    domain_check = re.compile("^[a-zA-Z0-9]+([\-\.]{1}[a-zA-Z0-9]+)*\.[a-zA-Z]{2,}$")
+    domain_check = re.compile('^[a-zA-Z0-9]+([\-\.]{1}[a-zA-Z0-9]+)*\.[a-zA-Z]{2,}$')
     return domain_check.match(domain)
 
 def find_domains(domain, verbose):
@@ -57,18 +78,18 @@ def find_domains(domain, verbose):
 def check_chrome_301_header_trunc(resps):
     for hre in resps.history:
         if hre.status_code == 301 or hre.status_code == 302: # do 302 as well :)
-            CRLF = "\r\n"
+            CRLF = '\r\n'
             
-            addr = "/"
-            if(len(hre.url.split("/")) > 3)
-                addr = hre.url[(7 + len(hre.url.split("/")[2])):]
+            addr = '/'
+            if(len(hre.url.split('/')) > 3):
+                addr = hre.url[(7 + len(hre.url.split('/')[2])):]
             
             request = [
-                "GET " + addr + " HTTP/1.1",
-                "Host: " + hre.url.split("/")[2],
-                "Connection: Close",
-                "",
-                "",
+                'GET ' + addr + ' HTTP/1.1',
+                'Host: ' + hre.url.split('/')[2],
+                'Connection: Close',
+                '',
+                '',
             ]
             
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -76,7 +97,7 @@ def check_chrome_301_header_trunc(resps):
             
             wrappedSocket = ssl.wrap_socket(sock)
 
-            wrappedSocket.connect((hre.url.split("/")[2], 443))
+            wrappedSocket.connect((hre.url.split('/')[2], 443))
             wrappedSocket.send(CRLF.join(request).encode('utf-8'))
             # Get the response (in several parts, if necessary)
             response = wrappedSocket.recv(4096)
@@ -91,7 +112,7 @@ def check_chrome_301_header_trunc(resps):
     
 # https://github.com/jeremyn/Sublist3r/blob/09a2b9cdaf020a7dac6701765a846807ef6db814/sublist3r.py#L82
 def subdomain_cmp(d1, d2):
-    """cmp function for subdomains d1 and d2.
+    '''cmp function for subdomains d1 and d2.
     This cmp function orders subdomains from the top-level domain at the right
     reading left, then moving '^' and 'www' to the top of their group. For
     example, the following list is sorted correctly:
@@ -106,7 +127,7 @@ def subdomain_cmp(d1, d2):
         'www.example.net',
         'a.example.net',
     ]
-    """
+    '''
     d1 = d1.split('.')[::-1]
     d2 = d2.split('.')[::-1]
 
@@ -126,6 +147,52 @@ def subdomain_cmp(d1, d2):
             val = 1
     return val
 
+def mcb_check(domain, root):
+    if len(root) > 0:
+        for child in root:
+            if mcb_check(domain, child):
+                return True
+    else:
+        if root.tag == 'script' and root.get('src') != None and root.get('src').startswith('http://'):
+            return True
+        if root.tag == 'iframe' and root.get('src') != None and root.get('src').startswith('http://'):
+            return True
+        if root.tag == 'link' and root.get('href') != None and root.get('href').startswith('http://'):
+            return True
+        if root.tag == 'object' and root.get('data') != None and root.get('data').startswith('http://'):
+            return True
+            
+        if domain != None and root.tag == 'a' and root.get('href') != None:
+            href = root.get('href')
+            path = ''
+            if (href.startswith('https://') or href.startswith('http://')) and len(href.split('/')) >= 4:
+                mcbhrefd = href.split('/')
+                if mcbhrefd[2] == domain:
+                    path = mcbhrefd[3]
+                else:
+                    return False
+            else: #File then
+                path = href
+            
+            # Recursively check 1 level deep
+            try:
+                if mcb_check(None, html.fromstring(requests.get('https://' + domain + '/' + path, timeout=timeout, allow_redirects=True, headers={'User-Agent': 'HTTPSE-ruleset-generator STEP2. Internet security project https://github.com/Foorack/httpse-ruleset-generator.', 'Connection':'close'}).content)):
+                    print(domain, path)
+                    return True
+            except etree.XMLSyntaxError:
+                ()
+    
+    return False
+    
+def add_domain_success(domain, content):
+    try:
+        if mcb_check(domain, html.fromstring(content)):
+            hmixedcont.append(domain)
+        else:
+            hsuccess.append(domain)
+    except etree.XMLSyntaxError:
+        ()
+            
 def test_domain(host):
     # Check if DNS exists to save time
     try:
@@ -136,7 +203,7 @@ def test_domain(host):
     # Do HTTP
     resp, resps = None, None
     try:
-        resp = requests.get("http://" + host + '/', timeout=timeout, allow_redirects=True, headers={'User-Agent': 'HTTPSE-ruleset-generator STEP1. Internet security project https://github.com/Foorack/httpse-ruleset-generator.', 'Connection':'close'})
+        resp = requests.get('http://' + host + '/', timeout=timeout, allow_redirects=True, headers={'User-Agent': 'HTTPSE-ruleset-generator STEP1. Internet security project https://github.com/Foorack/httpse-ruleset-generator.', 'Connection':'close'})
     except requests.exceptions.ConnectionError:
         ()
     except requests.exceptions.Timeout or socket.timeout:
@@ -144,16 +211,16 @@ def test_domain(host):
     
     # Do HTTPS
     try:
-        resps = requests.get("https://" + host + '/', timeout=timeout, allow_redirects=True, headers={'User-Agent': 'HTTPSE-ruleset-generator STEP2. Internet security project https://github.com/Foorack/httpse-ruleset-generator.', 'Connection':'close'})
+        resps = requests.get('https://' + host + '/', timeout=timeout, allow_redirects=True, headers={'User-Agent': 'HTTPSE-ruleset-generator STEP2. Internet security project https://github.com/Foorack/httpse-ruleset-generator.', 'Connection':'close'})
     except requests.exceptions.SSLError as err:
         msg = str(err)
-        if "doesn't match" in msg:
+        if 'doesn\"t match' in msg:
             if resp == None:
                 hbadcert.append(host)
                 return
                 
             # Check if HTTP redirects to a working HTTPS website
-            if resp.url.startswith("https://"):
+            if resp.url.startswith('https://'):
                 rules.append([host, resp.url, 0])
             else:
                 if len(resp.history) > 0:
@@ -161,7 +228,7 @@ def test_domain(host):
                 else:
                     hbadcert.append(host)
             return
-        elif "CERTIFICATE_VERIFY_FAILED" in msg:
+        elif 'CERTIFICATE_VERIFY_FAILED' in msg:
             hinchain.append(host)
             return
         else:
@@ -182,16 +249,13 @@ def test_domain(host):
         print(host, resp, resps)
     
     if resp == None:
-        hsuccess.append(host) # Perfect, only HTTPS works
+        add_domain_success(host, resps.content) # Perfect, only HTTPS works
         return
     
     # ...
     # At this point we know HTTPS works fine and that HTTP responds
     # ...
     
-    if resps.status_code == 401:
-        h401.append(host)
-        return
     if resps.status_code == 403:
         h403.append(host)
         return
@@ -200,13 +264,13 @@ def test_domain(host):
         return
     
     # Check if HTTP redirects to the same domain with HTTPS
-    if resp.url.startswith("https://" + host):
-        hsuccess.append(host)
+    if resp.url.startswith('https://' + host):
+        add_domain_success(host, resps.content)
         return
     
     # It does not redirect to itself with HTTPS, maybe it redirect to itself with HTTP?
-    if resp.url.startswith("http://" + host):
-        hsuccess.append(host)
+    if resp.url.startswith('http://' + host):
+        add_domain_success(host, resps.content)
         return
     
     # HTTP redirects to another domain
@@ -217,19 +281,19 @@ def test_domain(host):
         e301 = check_chrome_301_header_trunc(resps)
     
     # Lets check if HTTPS redirects to another HTTPS?
-    if resps.url.startswith("https://"):
+    if resps.url.startswith('https://'):
         if e301:
             rules.append([host, resps.url, 1])
         else:
-            hsuccess.append(host)
+            add_domain_success(host, resps.content)
         return
     
     # Lets check if HTTPS redirects to HTTP?
-    if resps.url.startswith("http://"):
+    if resps.url.startswith('http://'):
         hredirecttmp.append([host, resps.url[7:], e301])
         return
     
-    if resp.url.startswith("http://"):
+    if resp.url.startswith('http://'):
         hredirecttmp.append([host, resps.url[7:], e301])
     else:
         rules.append([host, resp.url, 0])
@@ -237,12 +301,14 @@ def test_domain(host):
     return
 
 def main(domain, name, timeout, verbose):
+    global hsuccess
+    global hbadcert
     # Step 0: Validate input
     if not check_domain(domain):
-        print("Error: Please enter a valid domain.")
+        print('Error: Please enter a valid domain.')
         exit()
     
-    if name == "":
+    if name == '':
         name = domain
     
     # Step 1: Find subdomains using sublist3r
@@ -273,7 +339,7 @@ def main(domain, name, timeout, verbose):
         def dd2():
             for host in hsuccess:
                 if hr[1].startswith(host):
-                    rules.append([hr[0], "https://" + hr[1], 0])
+                    rules.append([hr[0], 'https://' + hr[1], 0])
                     return True
             return False
         if not dd2():
@@ -283,12 +349,17 @@ def main(domain, name, timeout, verbose):
     for rule in rules:
         hsuccess.append(rule[0])
     
+    # Do not make a ruleset if we have 0 successful domains
+    if len(hsuccess) == 0:
+        print("No successful domains found. :(")
+        return
+    
     # Sort domains the way we want it
-    hsuccess1 = sorted(
+    hsuccess = sorted(
             hsuccess,
             key=functools.cmp_to_key(subdomain_cmp),
     )
-    hbadcert1 = sorted(
+    hbadcert = sorted(
             hbadcert,
             key=functools.cmp_to_key(subdomain_cmp),
     )
@@ -296,100 +367,94 @@ def main(domain, name, timeout, verbose):
     # Step 3: Print results to output file
     f = open(domain + '.xml', 'w')
     if is_bad_domains():
-        f.write("<!--\n")
-        f.write("\n")
-    #f.write("\tGenerator: HTTPSE-ruleset-generator v1.0\n")
-    #f.write("\n")
-    
-    if len(h401) > 0:
-        f.write("\t401 Unauthorized:\n")
-        for host in h401:
-            f.write("\t\t- " + host + "\n")
-        f.write("\n")
+        f.write('<!--\n')
+        f.write('\n')
+    #f.write('\tGenerator: HTTPSE-ruleset-generator v1.0\n')
+    #f.write('\n')
     
     if len(h403) > 0:
-        f.write("\t403 Forbidden:\n")
+        f.write('\t403 Forbidden:\n')
         for host in h403:
-            f.write("\t\t- " + host + "\n")
-        f.write("\n")
+            f.write('\t\t- ' + host + '\n')
+        f.write('\n')
         
     if len(h503) > 0:
-        f.write("\t503 Service Unavailable:\n")
+        f.write('\t503 Service Unavailable:\n')
         for host in h503:
-            f.write("\t\t- " + host + "\n")
-        f.write("\n")
+            f.write('\t\t- ' + host + '\n')
+        f.write('\n')
     
     if len(hrefused) > 0:
-        f.write("\tRefused:\n")
+        f.write('\tRefused:\n')
         for host in hrefused:
-            f.write("\t\t- " + host + "\n")
-        f.write("\n")
+            f.write('\t\t- ' + host + '\n')
+        f.write('\n')
         
     if len(htimeout) > 0:
-        f.write("\tTimeout:\n")
+        f.write('\tTimeout:\n')
         for host in htimeout:
-            f.write("\t\t- " + host + "\n")
-        f.write("\n")
+            f.write('\t\t- ' + host + '\n')
+        f.write('\n')
     
     if len(hbadcert) > 0:
-        f.write("\tInvalid certificate:\n")
+        f.write('\tInvalid certificate:\n')
         for host in hbadcert:
-            f.write("\t\t- " + host + "\n")
-        f.write("\n")
+            f.write('\t\t- ' + host + '\n')
+        f.write('\n')
         
     if len(hinchain) > 0:
-        f.write("\tIncomplete certificate-chain:\n")
+        f.write('\tIncomplete certificate-chain:\n')
         for host in hinchain:
-            f.write("\t\t- " + host + "\n")
-        f.write("\n")
+            f.write('\t\t- ' + host + '\n')
+        f.write('\n')
         
     if len(hsslerror) > 0:
-        f.write("\tOther unknown SSL error:\n")
+        f.write('\tOther unknown SSL error:\n')
         for host in hsslerror:
-            f.write("\t\t- " + host + "\n")
-        f.write("\n")
+            f.write('\t\t- ' + host + '\n')
+        f.write('\n')
         
     if len(hredirect) > 0:
-        f.write("\tRedirects to HTTP:\n")
+        f.write('\tRedirects to HTTP:\n')
         for host in hredirect:
-            f.write("\t\t- " + host + "\n")
-        f.write("\n")
+            f.write('\t\t- ' + host + '\n')
+        f.write('\n')
         
     if len(hdiffcont) > 0:
-        f.write("\tDifferent content:\n")
+        f.write('\tDifferent content:\n')
         for host in hdiffcont:
-            f.write("\t\t- " + host + "\n")
-        f.write("\n")
+            f.write('\t\t- ' + host + '\n')
+        f.write('\n')
         
     if len(hmixedcont) > 0:
-        f.write("\tMCB:\n")
+        f.write('\tMCB:\n')
         for host in hmixedcont:
-            f.write("\t\t- " + host + "\n")
-        f.write("\n")
+            f.write('\t\t- ' + host + '\n')
+        f.write('\n')
     
     if is_bad_domains():
-        f.write("-->\n")
+        f.write('-->\n')
     
-    f.write("<ruleset name=\"" + name + "\">\n")
+    f.write('<ruleset name=\"' + name + '\">\n')
     for host in hsuccess:
-        f.write("\t<target host=\"" + host + "\" />\n")
+        f.write('\t<target host=\"' + host + '\" />\n')
     
-    f.write("\n")
-    if is_bad_domains():
-        f.write("\t<securecookie host=\".+\" name=\".+\" />\n")
-        f.write("\n")
+    f.write('\n')
+    if not is_bad_domains():
+        f.write('\t<securecookie host=\".+\" name=\".+\" />\n')
+        f.write('\n')
         
     for rule in rules:
         if rule[2] == 1:
-            f.write("\t<!-- The domain " + rule[0] + " is redirected because the secure version sends an invalid redirect response. -->\n")
-        f.write("\t<rule from=\"^http://" + re.escape(rule[0]) + "/\" to=\"" + rule[1] + "\" />\n")
+            f.write('\t<!-- The domain ' + rule[0] + ' is redirected because the secure version sends an invalid redirect response. -->\n')
+        f.write('\t<rule from=\"^http://' + re.escape(rule[0]) + '/\" to=\"' + rule[1] + '\" />\n')
     if len(rules) > 0:
-        f.write("\n")
-    f.write("\t<rule from=\"^http:\" to=\"https:\" />\n")
-    f.write("</ruleset>")
+        f.write('\n')
+    f.write('\t<rule from=\"^http:\" to=\"https:\" />\n')
+    f.write('</ruleset>')
     f.flush()
 
-if __name__=="__main__":
+if __name__=='__main__':
     args = parse_args()
     domain = args.domain
     name = args.name
