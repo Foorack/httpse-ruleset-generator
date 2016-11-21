@@ -214,7 +214,7 @@ def test_domain(host):
         resps = requests.get('https://' + host + '/', timeout=timeout, allow_redirects=True, headers={'User-Agent': 'HTTPSE-ruleset-generator STEP2. Internet security project https://github.com/Foorack/httpse-ruleset-generator.', 'Connection':'close'})
     except requests.exceptions.SSLError as err:
         msg = str(err)
-        if 'doesn\"t match' in msg:
+        if 'doesn\'t match' in msg:
             if resp == None:
                 hbadcert.append(host)
                 return
