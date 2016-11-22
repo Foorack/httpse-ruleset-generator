@@ -1,5 +1,5 @@
 # COMPLETE REWRITE (AGAIN) IN PROCESS. DUE TO THE COMPLEXITY OF THIS PROJECT I'M REWRITING IT FOR THE THIRD TIME. BASIC SCHEMATIC BELOW. CONTRIBUTIONS ARE WELCOMED
-![https://i.imgur.com/osp8phv.png]
+![Chart](https://i.imgur.com/osp8phv.png)
 
 # httpse-ruleset-generator
 
