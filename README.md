@@ -1,3 +1,6 @@
+# COMPLETE REWRITE (AGAIN) IN PROCESS. DUE TO THE COMPLEXITY OF THIS PROJECT I'M REWRITING IT FOR THE THIRD TIME. BASIC SCHEMATIC BELOW. CONTRIBUTIONS ARE WELCOMED
+!(https://i.imgur.com/osp8phv.png)
+
 # httpse-ruleset-generator
 
 This tool is used for automatic ruleset generation for the software - [https-everywhere](https://github.com/efforg/https-everywhere).
