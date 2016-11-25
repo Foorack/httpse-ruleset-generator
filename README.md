@@ -4,6 +4,7 @@
 # httpse-ruleset-generator
 
 This tool is used for automatic ruleset generation for the software - [https-everywhere](https://github.com/efforg/https-everywhere).
+Old version 2 can be found in old-ruleset-generator.py. New version 3 is being written in ruleset-generator.py.
 
 # Installation
 This installation bashscript will prepare dependencies and install required python libraries.
