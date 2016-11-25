@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 import argparse
-import request
+import requests
 import socket
 import ssl
 import sys
