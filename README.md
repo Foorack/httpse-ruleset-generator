@@ -22,11 +22,18 @@ Example:
 - [ ] Step 2: Stabilise and finish for general use.
 - [ ] Step 3: Possibly merge into the main EFForg/https-everywhere project.
 
-# To-Do List
+# To-Do List New
+
+- [ ] Implement basic structure, see flowchart
+- [ ] Proper argument handling
+- [ ] Implement mixed-content checks
+- [ ] Implement different-content checks
+
+# To-Do List (old)
 
 - [ ] Clean up code
 - [X] Proper argument handling
-- [ ] Implement mixed-content checks
+- [X] Implement mixed-content checks
 - [ ] Implement different-content checks
 - [X] Check if http redirects to other domain
 - [X] Add support for non-success error codes
