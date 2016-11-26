@@ -4,7 +4,7 @@
 # httpse-ruleset-generator
 
 This tool is used for automatic ruleset generation for the software - [https-everywhere](https://github.com/efforg/https-everywhere).
-Old version 2 can be found in old-ruleset-generator.py. New version 3 is being written in ruleset-generator.py.
+Old version 2 can be found in old-ruleset-generator.py. The new version 3 is being written in ruleset-generator.py.
 
 # Installation
 This installation bashscript will prepare dependencies and install required python libraries.
@@ -14,11 +14,19 @@ This installation bashscript will prepare dependencies and install required pyth
 # Usage
 This program requires python3.4 to run. It should work with other python3 versions however this is untested. Please remember to manually review the generated ruleset before submitting.
 
-    python3 ruleset-generator.py <domain> "<website name>"
-    
+    python3 ruleset-generator.py -d <domain> -n "<website name>"
+
 Example:
 
-    python3 ruleset-generator.py eff.org "Electronic Frontier Foundation"
+    python3 ruleset-generator.py -d eff.org -n "Electronic Frontier Foundation"
+
+Full list of arguments:
+
+    -d  --domain    Domain to generate ruleset about, TLD, do not include www
+    -n  --name      Label the ruleset with a custom name, for example "Electronic Frontier Foundation"
+    -t  --timeout   Define timeout value, this might be neccesary on slower internet connections
+    -v  --verbose   Enable verbosity and print debug data in realtime
+    -s  --summary   Write a summary report containing more specific data regarding the scan
     
 # Roadmap
 
@@ -28,17 +36,15 @@ Example:
 
 # To-Do List New
 
-- [ ] Implement basic structure, see flowchart
-- [ ] Proper argument handling
-- [ ] Implement mixed-content checks
-- [ ] Implement different-content checks
-
-# To-Do List (old)
-
-- [ ] Clean up code
+- [X] Implement basic structure, see flowchart
 - [X] Proper argument handling
 - [X] Implement mixed-content checks
 - [ ] Implement different-content checks
-- [X] Check if http redirects to other domain
-- [X] Add support for non-success error codes
-- [X] Fix chrome header truncate error issue
+- [ ] Print out results to xml file
+- [ ] Implement summary report logic
+- [ ] Add missing function documenation
+
+# License
+This code is being written and released under 
+GNU GENERAL PUBLIC LICENSE Version 3. Please see [LICENSE File](LICENSE) 
+for more information.
