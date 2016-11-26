@@ -79,19 +79,21 @@ def check_dns(args, domain):
     except dns.resolver.NXDOMAIN:
         return False
 
-def check_mcb(args, domain, root):
+def check_mcb(args, summary, domain, recursive, root):
     """Iterates and scans for Mixed Content Blocking.
     Will follow links 1 level deep. Does not yet check css files.
 
     @param: args Arguments object from argparse.
+    @param: summary Summary object used to collect detailed scan information.
     @param: domain Domain to check against.
+    @param: recursive If the scan should continue to other links.
     @param: root Content document HTML root.
     @return: True if MCB detected, False if not.
 
     """
     if len(root) > 0:
         for child in root:
-            if check_mcb(args, domain, child):
+            if check_mcb(args, summary, domain, True, child):
                 return True
     else:
         if root.tag == 'script' and root.get('src') != None and root.get('src').startswith('http://'):
@@ -121,11 +123,49 @@ def check_mcb(args, domain, root):
 
             # Recursively check 1 level deep
             try:
-                if check_mcb(args, None, html.fromstring(make_request(args, True, domain, path).content)):
+                if check_mcb(args, summary, domain, False, html.fromstring(make_request(args, True, domain, path).content)):
                     print(domain, path) # TODO
                     return True
             except lxml.etree.XMLSyntaxError:
                 ()
+    return False
+
+def check_same_content(args, summary, respc, respsc):
+    return False #FIXME
+
+def check_chrome_301_header_trunc(args, summary, resps):
+    for hre in resps.history:
+        if hre.status_code == 301 or hre.status_code == 302: # do 302 as well :)
+            CRLF = '\r\n'
+
+            addr = '/'
+            if(len(hre.url.split('/')) > 3):
+                addr = hre.url[(7 + len(hre.url.split('/')[2])):]
+
+            request = [
+                'GET ' + addr + ' HTTP/1.1',
+                'Host: ' + hre.url.split('/')[2],
+                'Connection: Close',
+                '',
+                '',
+            ]
+
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(10)
+
+            wrappedSocket = ssl.wrap_socket(sock)
+
+            wrappedSocket.connect((hre.url.split('/')[2], 443))
+            wrappedSocket.send(CRLF.join(request).encode('utf-8'))
+            # Get the response (in several parts, if necessary)
+            response = wrappedSocket.recv(4096)
+
+            wrappedSocket.close()
+
+            # HTTP headers will be separated from the body by an empty line
+            header_data, ll, body = response.decode('utf-8').partition(CRLF + CRLF)
+
+            return ll != '\r\n\r\n'
     return False
 
 def get_links(root):
@@ -198,6 +238,23 @@ def process_success(args, results, summary, domain, resp, resps):
         if resp.status_code == 200:
             results['error']['403'].append(domain)
         else:
+            if resp.url.startswith('https://'):
+                links = get_links(resp.content)
+                for link in links:
+                    if link.startswith('http://'):
+                        continue
+
+                    if link.startswith('https://' + domain) or link.startswith('//' + domain):
+                        r2 = make_request(args, True, domain, link.split('/')[4])
+                    elif link.startswith('/'):
+                        r2 = make_request(args, True, domain, link[1:])
+                    else:
+                        r2 = make_request(args, True, domain, link)
+
+                    if r2.status_code == 200:
+                        results['success'].append([domain, r2.url])
+                        return
+
             links = get_links(resps.content)
             for link in links:
                 if link.startswith('http://'):
@@ -214,9 +271,35 @@ def process_success(args, results, summary, domain, resp, resps):
                     results['success'].append([domain, r2.url])
                     return
             results['error']['no_working_url_known'].append(domain)
-            return
+        return
 
+    if resps.status_code == 503:
+        if resp.status_code == 200:
+            results['error']['503'].append(domain)
+        else:
+            results['error']['no_working_url_known'].append(domain)
+        return
 
+    if resps.status_code == 504:
+        if resp.status_code == 200:
+            results['error']['504'].append(domain)
+        else:
+            results['error']['no_working_url_known'].append(domain)
+        return
+
+    if check_mcb(args, summary, domain, True, html.fromstring(resps.content)):
+        results['error']['mixed_content'].append(domain)
+        return
+
+    if not check_same_content(args, summary, resp.content, resps.content):
+        results['error']['different_content'].append(domain)
+        return
+
+    if check_chrome_301_header_trunc(args, summary, resps):
+        results['rules'].append([domain, resps.url])
+        return
+
+    results['success'].append([domain])
 
 def test_domain(args, results, summary, domain):
     """Tests a domain if it has functional HTTPS support, and if
@@ -334,6 +417,9 @@ def ruleset_generator(args):
     domains = find_domains(args)
 
     [test_domain(args, results, summary, domain) for domain in domains]
+
+    # TODO print results
+    # TODO summary report
 
 if __name__=='__main__':
     #domain, name, timeout, verbose, summary
