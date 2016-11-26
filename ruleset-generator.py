@@ -6,6 +6,7 @@ import dns.resolver
 import re
 import requests
 import socket
+import ssl
 import sys
 from lxml import html
 from lxml import etree
