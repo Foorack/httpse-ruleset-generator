@@ -26,7 +26,6 @@ Full list of arguments:
     -n  --name      Label the ruleset with a custom name, for example "Electronic Frontier Foundation"
     -t  --timeout   Define timeout value, this might be neccesary on slower internet connections
     -v  --verbose   Enable verbosity and print debug data in realtime
-    -s  --summary   Write a summary report containing more specific data regarding the scan
     
 # Roadmap
 

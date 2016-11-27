@@ -153,8 +153,8 @@ def sanitize_input(text):
 def check_same_content(args, summary, respc, respsc):
 
     hresp, hresps = None, None
-    hresp1 = lxml.html.fromstring(sanitize_input(respc.text))
-    hresp2 = lxml.html.fromstring(sanitize_input(respsc.text))
+    hresp1 = lxml.html.fromstring(sanitize_input(respc))
+    hresp2 = lxml.html.fromstring(sanitize_input(respsc))
 
     # XOR: Check if one is malformed and one is not.
     if (hresp1 == None) != (hresp2 != None):
@@ -302,8 +302,8 @@ def subdomain_cmp(d1, d2):
         'a.example.net',
     ]
     '''
-    d1 = d1[0].split('.')[::-1]
-    d2 = d2[0].split('.')[::-1]
+    d1 = (d1 if isinstance(d1, str) else d1[0]).split('.')[::-1]
+    d2 = (d2 if isinstance(d2, str) else d2[0]).split('.')[::-1]
 
     val = 1 if d1>d2 else (-1 if d1<d2 else 0)
     if ((len(d1) < len(d2)) and
@@ -333,7 +333,7 @@ def process_success(args, results, summary, domain, resp, resps, tests=None):
     @param: resps Request object representing the HTTPS connection.
 
     """
-    if resps.status_code == 403:
+    if resps != None and resps.status_code == 403:
         if resp.status_code == 200:
             results['error']['403'].append(domain)
         else:
@@ -351,42 +351,43 @@ def process_success(args, results, summary, domain, resp, resps, tests=None):
                         r2 = make_request(args, True, domain, link)
 
                     if r2.status_code == 200:
-                        process_success(args, results, summary, domain, resp, resps, [r2.url])
+                        results['success'].append([domain, r2.url])
                         return
 
-            links = get_links(resps.text)
-            for link in links:
-                if link.startswith('http://'):
-                    continue
+            if resp.url.startswith('http://'):
+                links = get_links(resps.text)
+                for link in links:
+                    if link.startswith('http://'):
+                        continue
 
-                if link.startswith('https://' + domain) or link.startswith('//' + domain):
-                    r2 = make_request(args, True, domain, link.split('/')[3])
-                elif link.startswith('/'):
-                    r2 = make_request(args, True, domain, link[1:])
-                else:
-                    r2 = make_request(args, True, domain, link)
-
-                if r2.status_code == 200:
-                    process_success(args, results, summary, domain, resp, resps, [r2.url])
-                    return
+                    if link.startswith('https://' + domain) or link.startswith('//' + domain):
+                        r2 = make_request(args, True, domain, link.split('/')[3])
+                    elif link.startswith('/'):
+                        r2 = make_request(args, True, domain, link[1:])
+                    else:
+                        r2 = make_request(args, True, domain, link)
+    
+                    if r2.status_code == 200:
+                        results['success'].append([domain, r2.url])
+                        return
             results['error']['no_working_url_known'].append(domain)
         return
 
-    if resps.status_code == 503:
+    if resps != None and resps.status_code == 503:
         if resp.status_code == 200:
             results['error']['503'].append(domain)
         else:
             results['error']['no_working_url_known'].append(domain)
         return
 
-    if resps.status_code == 504:
+    if resps != None and resps.status_code == 504:
         if resp.status_code == 200:
             results['error']['504'].append(domain)
         else:
             results['error']['no_working_url_known'].append(domain)
         return
 
-    if check_mcb(args, summary, domain, True, lxml.html.fromstring(sanitize_input(resps.text))):
+    if resps != None and resps.url.startswith('https://') and check_mcb(args, summary, domain, True, lxml.html.fromstring(sanitize_input(resps.text))):
         results['error']['mixed_content'].append(domain)
         return
 
@@ -423,22 +424,25 @@ def test_domain(args, results, summary, domain):
 
     resp, resps = None, None
 
-    def do_http():
+    # Only do HTTP if neccesary
+    try:
+        resps = make_request(args, True, domain)
         try:
             resp = make_request(args, False, domain)
         except requests.exceptions.ConnectionError:
             ()
         except requests.exceptions.Timeout or socket.timeout:
             ()
-
-    # Only do HTTP if neccesary
-    try:
-        resps = make_request(args, True, args.domain)
-        do_http()
     except requests.exceptions.SSLError as err:
         msg = str(err)
         if 'doesn\'t match' in msg:
-            do_http()
+            try:
+                resp = make_request(args, False, domain)
+            except requests.exceptions.ConnectionError:
+                ()
+            except requests.exceptions.Timeout or socket.timeout:
+                ()
+
             if resp == None:
                 results['error']['invalid_certificate'].append(domain)
                 return
