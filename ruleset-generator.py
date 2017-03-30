@@ -20,6 +20,7 @@ VERSION = '4.0.0'
 # ARGUMENT PARSING
 #
 
+
 def parser_error(errmsg):
     """Argparse error message handler.
 
@@ -30,13 +31,15 @@ def parser_error(errmsg):
     print('Error: ' + errmsg)
     exit()
 
+
 def parse_args():
     """Parse program arguments with argparse.
 
     @return: Arguments object by argparse.
 
     """
-    parser = argparse.ArgumentParser(epilog = '    Example: \r\npython3 ' + sys.argv[0] + ' -d eff.org')
+    parser = argparse.ArgumentParser(
+        epilog='    Example: \r\npython3 ' + sys.argv[0] + ' -d eff.org')
     parser.error = parser_error
     parser._optionals.title = 'OPTIONS'
     parser.add_argument('-d', '--domain', \
@@ -48,3 +51,18 @@ def parse_args():
     parser.add_argument('-v', '--verbose', \
         help='Enable verbosity and print debug data in realtime', action='store_true', default=False)
     return parser.parse_args()
+
+
+def ruleset_generator(args):
+
+    if not check_dns(args, args.domain):
+        print("No DNS address found for domain '%s'! Exiting..." %
+              (args.domain))
+        return
+
+    
+
+
+if __name__ == '__main__':
+    #domain, name, timeout, verbose
+    ruleset_generator(parse_args())
